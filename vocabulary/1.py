@@ -61,6 +61,11 @@ def handle_message(event):
             event.reply_token,
             TextSendMessage(text=reply_text)
         )
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請輸入「抽單字」來抽取今日單字！")
+        )
 
 if __name__ == "__main__":
     app.run()
