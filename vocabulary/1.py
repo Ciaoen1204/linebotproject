@@ -54,7 +54,7 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    if event.message.text == "抽單字":
+    if event.message.text == "每日單字":
         selected_words = random.sample(words, 3)
         reply_text = "今日單字:\n" + "\n".join(selected_words)
         line_bot_api.reply_message(
@@ -64,7 +64,7 @@ def handle_message(event):
     else:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="請輸入「抽單字」來抽取今日單字！")
+            TextSendMessage(text="請輸入「每日單字」來抽取今日單字！")
         )
 
 if __name__ == "__main__":
