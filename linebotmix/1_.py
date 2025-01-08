@@ -84,15 +84,15 @@ def send_daily_video():
     line_bot_api.push_message(os.getenv("user_id"), TextSendMessage(text=reply))
 
 # Vocabulary quiz setup
-csv_filepath = os.path.join(os.path.dirname(__file__), 'vocabulary.csv')
-words, translations = [], {}
-if os.path.exists(csv_filepath):
-    with open(csv_filepath, newline='', encoding='utf-8') as csvfile:
+def load_words_from_csv(filepath):
+    words, translations = [], {}
+    with open(filepath, newline='', encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
             word, translation = row
             words.append(word)
             translations[word] = translation
+    return words, translations
 
 def generate_cloze(word):
     hidden = list(word)
@@ -100,8 +100,27 @@ def generate_cloze(word):
         hidden[i] = '_'
     return ''.join(hidden)
 
+csv_filepath = os.path.join(os.path.dirname(__file__), 'vocabulary.csv')
+words, translations = load_words_from_csv(csv_filepath)
 correct_answer = None
 error_count = 0
+
+#--- 爬取單字資料功能 ---
+def fetch_vocabulary():
+    url = "https://wecan.tw/index.php/2018-12-02-08-34-31/2019-01-03-18-18-31/2000-basic-vocabulary"
+    response = requests.get(url)
+    response.encoding = 'utf-8'
+    soup = BeautifulSoup(response.text, 'html.parser')
+    table = soup.find('table')
+    words = []
+    for row in table.find_all('tr')[1:]:  # 跳過表頭
+        cols = row.find_all('td')
+        word = cols[0].text.strip()
+        meaning = cols[1].text.strip()
+        # 去除單字前面的數字和點
+        word = ''.join([i for i in word if not i.isdigit() and i != '.']).strip()
+        words.append(f"{word} ({meaning})")
+    return words
 
 # Audio processing
 ffmpeg_path =r"C:\Users\User\OneDrive\桌面\113-1程式\ffmpeg-master-latest-win64-gpl\ffmpeg-master-latest-win64-gpl\bin\ffmpeg.exe"
@@ -151,36 +170,38 @@ def callback():
 def handle_text_message(event):
     global correct_answer, error_count
     user_message = event.message.text.lower()
-    if user_message == "\u958b\u59cb\u904a\u6232":
+
+    if user_message == "開始遊戲":
         correct_answer = random.choice(words)
         cloze = generate_cloze(correct_answer)
         translation = translations[correct_answer]
         error_count = 0
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"\u8acb\u731c\u9019\u500b\u55ae\u5b57: {cloze} ({translation})")
-        )
-    elif correct_answer and user_message == correct_answer:
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"請猜這個單字: {cloze} ({translation})"))
+    elif user_message == correct_answer:
         translation = translations[correct_answer]
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=f"\u7b54\u5c0d\u4e86\uff01\u9019\u500b\u55ae\u5b57\u662f\uff1a{correct_answer}\uff0c\u4e2d\u6587\u662f\uff1a{translation}")
-        )
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"答對了！這個單字是：{correct_answer}，中文是：{translation}"))
         correct_answer = None
-    else:
+        error_count = 0
+    elif correct_answer is not None:
         error_count += 1
         if error_count >= 3:
             translation = translations[correct_answer]
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=f"\u932f\u8aa4\u6b21\u6578\u904e\u591a\uff01\u6b63\u78ba\u7b54\u6848\u662f\uff1a{correct_answer}\uff0c\u4e2d\u6587\u662f\uff1a{translation}")
+                TextSendMessage(text=f"錯誤次數過多！正確答案是：{correct_answer}，中文是：{translation}")
             )
             correct_answer = None
+            error_count = 0
         else:
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text=f"\u7b54\u932f\u4e86\uff0c\u518d\u8a66\u4e00\u6b21\u3002\u4f60\u5df2\u7d93\u932f\u4e86 {error_count} \u6b21\u3002")
+                TextSendMessage(text=f"答錯了，再試一次。你已經錯了 {error_count} 次。")
             )
+    elif user_message == "每日單字":
+        vocabulary_words = fetch_vocabulary()
+        selected_words = random.sample(vocabulary_words, 3)
+        reply_text = "今日單字:\n" + "\n".join(selected_words)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
 @handler.add(MessageEvent, message=AudioMessage)
 def handle_audio_message(event):
@@ -243,9 +264,9 @@ def handle_image_message(event):
 # Schedule daily tasks
 def schedule_jobs():
     # Schedule article push at 8:00 AM
-    schedule.every().day.at("20:10").do(send_daily_article)
+    schedule.every().day.at("00:20").do(send_daily_article)
     # Schedule video push at 12:00 PM
-    schedule.every().day.at("20:11").do(send_daily_video)
+    schedule.every().day.at("00:21").do(send_daily_video)
     
     while True:
         schedule.run_pending()
