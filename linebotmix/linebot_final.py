@@ -239,7 +239,7 @@ def handle_text_message(event):
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(
-                    text="請輸入提醒的時間和內容，例如：17點5分提醒我吃晚餐",
+                    text="請輸入提醒的時間和內容，例如：17點5分提醒我讀英文",
                     quick_reply=create_quick_reply()
                 )
             )
